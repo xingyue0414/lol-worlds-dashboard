@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worlds 即時面板</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #131a26; --panel2: #1a2333; --line: #263248;
+    --text: #e6ebf3; --muted: #8a97ad; --blue: #4a9eff; --red: #ff5a5f; --gold: #f0c35a; --green: #4fd18b;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; color: var(--gold); }
+  select, input, button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+  button { cursor: pointer; } button:hover { border-color: var(--muted); }
+  label { color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+  #status { margin-left: auto; color: var(--muted); font-size: 13px; }
+  #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 5px; }
+  #status.live .dot { background: var(--red); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px; padding: 12px 16px; }
+  @media (max-width: 1100px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .grid2 { grid-template-columns: minmax(0, 1fr); } .blueT, .redT { overflow-x: auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .5px; }
+  #stream iframe { width: 100%; aspect-ratio: 16/9; border: 0; border-radius: 8px; }
+  #score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+  .team { display: flex; align-items: center; gap: 10px; }
+  .team.red { flex-direction: row-reverse; text-align: right; }
+  .team img { width: 48px; height: 48px; object-fit: contain; }
+  .team .code { font-size: 22px; font-weight: 700; }
+  .team.blue .code { color: var(--blue); } .team.red .code { color: var(--red); }
+  .team .objs { color: var(--muted); font-size: 13px; }
+  .center { text-align: center; }
+  .center .kills { font-size: 30px; font-weight: 700; }
+  .center .kills .b { color: var(--blue); } .center .kills .r { color: var(--red); }
+  .center .clock { font-size: 15px; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .stats { display: grid; grid-template-columns: 1fr auto 1fr; gap: 4px 14px; margin-top: 10px; font-variant-numeric: tabular-nums; }
+  .stats div:nth-child(3n+1) { text-align: right; } .stats div:nth-child(3n+2) { color: var(--muted); text-align: center; font-size: 12px; }
+  .drakes { display: flex; gap: 3px; } .team.red .drakes { justify-content: flex-end; }
+  .drake { font-size: 11px; padding: 1px 5px; border-radius: 4px; background: var(--panel2); border: 1px solid var(--line); }
+  .chart { width: 100%; height: 120px; display: block; }
+  .wpbar { grid-column: 1 / -1; margin-top: 10px; }
+  .wpbar .lbl { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
+  .wpbar .lbl b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .wpbar .track { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--panel2); }
+  .wpbar .track i { display: block; transition: width .6s; } .wpbar .track i.b { background: var(--blue); } .wpbar .track i.r { background: var(--red); }
+  .pregame { margin: 4px 0 8px; }
+  #review { border-color: var(--gold); } #review h2 { color: var(--gold); font-size: 15px; }
+  .rv-sum { margin-bottom: 6px; } .rv-sum b.blue { color: var(--blue); } .rv-sum b.red { color: var(--red); }
+  .rv-list { margin: 0 0 8px; padding-left: 20px; } .rv-list li { margin-bottom: 6px; }
+  .wpnow { font-size: 22px; text-align: center; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  .champ { display: flex; align-items: center; gap: 8px; min-width: 170px; }
+  .champ .ico { position: relative; }
+  .champ .ico img { width: 38px; height: 38px; border-radius: 6px; display: block; }
+  .champ .lvl { position: absolute; right: -4px; bottom: -4px; background: #000c; font-size: 11px; padding: 0 3px; border-radius: 4px; }
+  .champ .ks { width: 18px; height: 18px; position: absolute; left: -5px; top: -5px; background: #000; border-radius: 50%; }
+  .champ .name { font-weight: 600; } .champ .role { color: var(--muted); font-size: 12px; }
+  .hp { height: 4px; background: #333; border-radius: 2px; margin-top: 3px; width: 100px; }
+  .hp i { display: block; height: 100%; border-radius: 2px; background: var(--green); }
+  .hp.dead i { background: transparent; }
+  .items { display: flex; gap: 2px; }
+  .items img, .items span { width: 28px; height: 28px; border-radius: 4px; background: var(--panel2); display: block; }
+  .muted { color: var(--muted); }
+  .blueT h2 { color: var(--blue); } .redT h2 { color: var(--red); }
+  #events { max-height: calc(100vh - 110px); overflow-y: auto; position: sticky; top: 64px; }
+  .ev { display: grid; grid-template-columns: 46px 1fr; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .ev .t { color: var(--gold); font-variant-numeric: tabular-nums; }
+  .ev.blue { border-left: 3px solid var(--blue); padding-left: 6px; }
+  .ev.red { border-left: 3px solid var(--red); padding-left: 6px; }
+  .ev.big { font-weight: 600; background: #f0c35a12; }
+  .ev img { width: 18px; height: 18px; vertical-align: -4px; border-radius: 3px; }
+  #filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; font-size: 12px; }
+  #msg { padding: 30px; text-align: center; color: var(--muted); }
+  #draftCard summary { cursor: pointer; list-style: none; } #draftCard summary h2 { display: inline; }
+  #draftCard summary::before { content: '▾ '; color: var(--muted); } #draftCard:not([open]) summary::before { content: '▸ '; }
+  #draftSides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .dteam { font-weight: 700; margin-bottom: 4px; } .dside.blue .dteam { color: var(--blue); } .dside.red .dteam { color: var(--red); text-align: right; }
+  .dteam .muted { font-weight: 400; font-size: 12px; }
+  .bans, .picks { display: flex; gap: 4px; margin-bottom: 4px; }
+  .slot { border: 1px dashed var(--line); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-direction: column; font-size: 11px; color: var(--muted); }
+  .slot.ban { width: 32px; height: 32px; } .slot.ban img { width: 30px; height: 30px; filter: grayscale(1) brightness(.6); border-radius: 5px; }
+  .slot.pick { flex: 1; min-width: 0; height: 66px; } .slot.pick img { width: 44px; height: 44px; border-radius: 6px; }
+  .slot.pick span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .slot.cur { border: 2px solid var(--gold); box-shadow: 0 0 8px #f0c35a66; }
+  .dtools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; } #draftSearch { flex: 1; min-width: 180px; }
+  .dpred { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } @media (max-width: 700px) { .dpred, #draftSides { grid-template-columns: 1fr; } }
+  .dpred h3 { font-size: 13px; margin: 4px 0 6px; font-weight: 500; } .dpred b.blue { color: var(--blue); } .dpred b.red { color: var(--red); }
+  .pbar { display: flex; gap: 8px; align-items: center; margin-bottom: 5px; } .pbar img { width: 30px; height: 30px; border-radius: 5px; }
+  .pb-main { flex: 1; min-width: 0; } .pb-top { display: flex; justify-content: space-between; font-size: 13px; }
+  .pb-track { height: 5px; background: var(--panel2); border-radius: 3px; } .pb-track i { display: block; height: 100%; border-radius: 3px; background: var(--gold); }
+  .pb-track i.blue { background: var(--blue); } .pb-track i.red { background: var(--red); }
+  .pb-note { font-size: 11px; }
+  #champGrid { display: flex; flex-wrap: wrap; gap: 3px; max-height: 170px; overflow-y: auto; margin-top: 8px; }
+  .cg { padding: 0; border: 1px solid transparent; background: none; } .cg img { width: 34px; height: 34px; border-radius: 5px; display: block; }
+  .cg:hover { border-color: var(--gold); }
+  #draftSim:not(:empty) { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); } #draftSim h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  .simsides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } @media (max-width: 700px) { .simsides { grid-template-columns: 1fr; } }
+  .slot.sim { border-style: dashed; border-color: var(--muted); }
+  .rsels { display: inline-flex; flex-wrap: wrap; gap: 3px; font-weight: 400; } .dside.red .rsels { justify-content: flex-end; }
+  .rsel { font-size: 12px; padding: 1px 2px; max-width: 110px; } .rsel.manual { border-color: var(--gold); }
+  .simfreq { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; font-size: 11px; } .simfreq .muted { width: 100%; }
+  .simchip { display: inline-flex; align-items: center; gap: 2px; background: var(--panel2); border-radius: 4px; padding: 1px 4px 1px 1px; } .simchip img { width: 22px; height: 22px; border-radius: 3px; } .cg.off { opacity: .2; pointer-events: none; }
+  .grid2 { display: grid; gap: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏆 Worlds 2026 即時面板</h1>
+  <select id="gameSel"><option>載入賽程中…</option></select>
+  <button id="reloadBtn" title="重新整理賽程">↻</button>
+  <label><input type="checkbox" id="follow" checked> 自動跟隨直播</label>
+  <label>延遲 <input type="number" id="delay" value="60" min="20" max="600" step="5" style="width:64px"> 秒</label>
+  <label><input type="checkbox" id="showStream"> 顯示直播</label>
+  <input id="ytId" value="jCBkw2pcR3Y" style="width:120px" title="YouTube 影片 ID">
+  <span id="status"><span class="dot"></span><span id="statusText">—</span></span>
+</header>
+
+<main>
+  <div class="grid2">
+    <div id="stream" class="card" hidden></div>
+    <details id="draftCard" class="card" open hidden>
+      <summary><h2>選角 BP · 即時選用機率</h2></summary>
+      <div id="pregame" class="pregame"></div>
+      <div id="draftSides"></div>
+      <div class="dtools">
+        <input id="draftSearch" placeholder="搜尋英雄（中文/英文），Enter 選第一個">
+        <button id="draftSkip" title="沒有禁用 / 跳過此手">跳過</button>
+        <button id="draftUndo">↶ 復原</button>
+        <button id="draftReset">重設</button>
+        <button id="draftSimBtn" title="從目前的 BP 推演到選完">🎲 模擬 BP</button>
+        <select id="firstPick" title="哪一隊拿到先選（第一手選英雄）"></select>
+        <label><input type="checkbox" id="fearless"> Fearless（系列賽用過的英雄不能再選）</label>
+      </div>
+      <div class="dpred"><div id="draftNext"></div><div id="draftInGame"></div></div>
+      <div id="draftSim"></div>
+      <div id="champGrid"></div>
+      <div id="draftInfo" class="muted" style="font-size:12px;margin-top:6px"></div>
+    </details>
+    <div id="msg" class="card">選擇一場比賽</div>
+    <div id="board" class="grid2" hidden>
+      <div class="card" id="score"></div>
+      <div class="card" id="review" hidden></div>
+      <div class="card"><h2>即時勝率走勢 <span id="wpInfo" class="muted" style="font-weight:400"></span></h2><div id="wpNow" class="wpnow"></div><svg id="wpChart" class="chart" preserveAspectRatio="none"></svg></div>
+      <div class="card"><h2>經濟差（藍 − 紅）</h2><svg id="chart" class="chart" preserveAspectRatio="none"></svg></div>
+      <div class="card blueT"><h2 id="blueName">藍方</h2><table id="blueTbl"></table></div>
+      <div class="card redT"><h2 id="redName">紅方</h2><table id="redTbl"></table></div>
+    </div>
+  </div>
+  <div class="card" id="events">
+    <h2>大事件時間軸</h2>
+    <div id="filters">
+      <label><input type="checkbox" data-f="kill" checked>擊殺</label>
+      <label><input type="checkbox" data-f="obj" checked>物件</label>
+      <label><input type="checkbox" data-f="item" checked>出裝</label>
+      <label><input type="checkbox" data-f="wp" checked>勝率擺盪</label>
+      <label><input type="checkbox" data-f="lvl">等級</label>
+    </div>
+    <div id="evList"></div>
+  </div>
+</main>
+
+<script src="draft.js"></script>
+<script src="winprob.js"></script>
+<script src="review.js"></script>
+<script>
+const GW = 'https://esports-api.lolesports.com/persisted/gw';
+const API_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'; // lolesports.com 網站公開使用的 key
+const FEED = 'https://feed.lolesports.com/livestats/v1';
+const WORLDS = '98767975604431411';
+const STEP = 10000; // feed 以 10 秒為單位
+const DD = 'https://ddragon.leagueoflegends.com';
+const DRAGON = { infernal: '火龍', mountain: '土龍', ocean: '水龍', cloud: '風龍', hextech: '海克斯龍', chemtech: '化工龍', elder: '遠古龍' };
+const ROLE = { top: '上路', jungle: '打野', mid: '中路', bottom: '下路', support: '輔助' };
+
+const $ = s => document.querySelector(s);
+// 選手名稱去掉隊伍前綴：「KC Canna」、「IGTheShy」→ Canna、TheShy
+const cleanName = (n, code) => {
+  if (!n) return n;
+  if (/\s/.test(n)) return n.replace(/^\S+\s+/, '');
+  return code && n.toUpperCase().startsWith(code.toUpperCase()) && n.length > code.length ? n.slice(code.length) : n;
+};
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmtT = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const fmtG = g => (g / 1000).toFixed(1) + 'k';
+const iso = ms => new Date(Math.floor(ms / STEP) * STEP).toISOString();
+
+// ---------- data dragon ----------
+const dd = { ver: null, items: {}, champs: {}, runes: {} };
+async function loadDD(patch) {
+  const versions = await (await fetch(`${DD}/api/versions.json`)).json();
+  const mm = patch ? patch.split('.').slice(0, 2).join('.') + '.' : '';
+  const ver = versions.find(v => mm && v.startsWith(mm)) || versions[0];
+  if (ver === dd.ver) return;
+  dd.ver = ver;
+  const [it, ch, ru] = await Promise.all(['item', 'champion', 'runesReforged'].map(f =>
+    fetch(`${DD}/cdn/${ver}/data/zh_TW/${f}.json`).then(r => r.json())));
+  dd.items = it.data;
+  dd.champs = ch.data;
+  dd.runes = {};
+  for (const tree of ru) for (const slot of tree.slots) for (const r of slot.runes) dd.runes[r.id] = r;
+}
+const champName = id => dd.champs[id]?.name || id;
+const champImg = id => `${DD}/cdn/${dd.ver}/img/champion/${id}.png`;
+const itemImg = id => `${DD}/cdn/${dd.ver}/img/item/${id}.png`;
+const itemName = id => dd.items[id]?.name || `#${id}`;
+const isMajorItem = id => { const it = dd.items[id]; return it && !(it.into && it.into.length) && it.gold?.total >= 900; };
+
+// ---------- API ----------
+async function gw(path, params) {
+  const q = new URLSearchParams({ hl: 'zh-TW', ...params });
+  const r = await fetch(`${GW}/${path}?${q}`, { headers: { 'x-api-key': API_KEY } });
+  if (!r.ok) throw new Error(`${path} ${r.status}`);
+  return (await r.json()).data;
+}
+async function feed(kind, gameId, startMs) {
+  const r = await fetch(`${FEED}/${kind}/${gameId}` + (startMs ? `?startingTime=${iso(startMs)}` : ''));
+  if (r.status === 204 || r.status === 404) return null;
+  if (!r.ok) throw new Error(`feed ${r.status}`);
+  return r.json();
+}
+
+// ---------- 賽程 ----------
+let games = []; // {gameId, matchId, label, state, teams:{blue,red}}
+async function loadGames() {
+  const [live, sched, tours] = await Promise.all([gw('getLive'), gw('getSchedule', { leagueId: WORLDS }), gw('getTournamentsForLeague', { leagueId: WORLDS })]);
+  const liveEvs = (live.schedule.events || []).filter(e => e.league?.id === WORLDS);
+  // 只列本屆世界賽（最新一屆的開始日期之後）
+  const since = tours.leagues[0].tournaments.map(t => t.startDate).sort().at(-1);
+  // getSchedule 不含 games 清單，對本屆已開打的比賽補抓 getEventDetails
+  const recent = sched.schedule.events.filter(e => e.state !== 'unstarted' && e.match && e.startTime >= since && !liveEvs.some(l => l.match?.id === e.match.id))
+    .sort((a, b) => b.startTime.localeCompare(a.startTime));
+  // 即將開打、隊伍已確定的比賽（可先做 BP 預測／模擬）
+  const upcoming = sched.schedule.events.filter(e => e.state === 'unstarted' && e.match?.teams?.every(t => t.code && t.code !== 'TBD'))
+    .sort((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, 4);
+  const details = await Promise.all([...upcoming, ...recent].map(e => gw('getEventDetails', { id: e.match.id })
+    .then(d => ({ ...e, match: {
+      ...e.match, games: d.event.match.games,
+      // getSchedule 的隊伍沒有 id（選角模型、Elo 都要靠 id 對應），改用 getEventDetails 的隊伍資料
+      teams: d.event.match.teams.map(t => ({ ...e.match.teams.find(x => x.code === t.code), ...t })),
+    } })).catch(() => null)));
+  const evs = [...liveEvs, ...details.filter(Boolean)];
+  const seen = new Set(); const list = [];
+  for (const e of evs) {
+    const m = e.match; if (!m || seen.has(m.id)) continue;
+    seen.add(m.id);
+    const byId = Object.fromEntries(m.teams.map(t => [t.id, t]));
+    let nextAdded = false;
+    for (const g of m.games || []) {
+      // 未開打的局只列出系列賽的下一局
+      if (g.state === 'unstarted') { if (nextAdded || m.games.some(x => x.state === 'inProgress')) continue; nextAdded = true; }
+      else if (g.state !== 'inProgress' && g.state !== 'completed') continue;
+      const side = {}; for (const gt of g.teams || []) side[gt.side] = byId[gt.id] || m.teams.find(t => !Object.values(side).includes(t));
+      if (!side.blue || !side.red) { side.blue = m.teams[0]; side.red = m.teams[1]; }
+      list.push({
+        gameId: g.id, matchId: m.id, gameNumber: g.number, state: g.state, start: e.startTime, teams: side,
+        label: `${g.state === 'inProgress' ? '🔴 ' : g.state === 'unstarted' ? '⏳ ' : ''}${side.blue.code} vs ${side.red.code} · 第${g.number}局 · ` +
+          new Date(e.startTime).toLocaleString('zh-TW', g.state === 'unstarted' ? { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' } : { month: 'numeric', day: 'numeric' }),
+      });
+    }
+  }
+  const rank = { inProgress: 0, unstarted: 1, completed: 2 };
+  list.sort((a, b) => rank[a.state] - rank[b.state] ||
+    (a.state === 'unstarted' ? a.start.localeCompare(b.start) : b.start.localeCompare(a.start)) || b.label.localeCompare(a.label));
+  games = list;
+  const sel = $('#gameSel'), cur = sel.value;
+  sel.innerHTML = list.length ? list.map(g => `<option value="${g.gameId}">${esc(g.label)}</option>`).join('') : '<option value="">目前沒有進行中/已完成的對局</option>';
+  if (list.some(g => g.gameId === cur)) sel.value = cur;
+  return list;
+}
+
+// ---------- 狀態 ----------
+let S = null; // 目前追蹤的對局
+let session = 0;
+
+function setStatus(text, live) { $('#statusText').textContent = text; $('#status').className = live ? 'live' : ''; }
+
+async function openGame(gameId) {
+  const my = ++session;
+  const g = games.find(x => x.gameId === gameId); if (!g) return;
+  S = { g, meta: null, t0: 0, snaps: [], events: [], cursor: 0, finished: false, gold: [], wp: [] };
+  $('#evList').innerHTML = ''; $('#board').hidden = true; $('#msg').hidden = false;
+  $('#msg').textContent = '載入中…';
+  if (!dd.ver) await loadDD(null);
+  await WP.load();
+  if (my !== session) return;
+  Draft.open(g, games);
+
+  // 第一個 window（不帶 startingTime）給出 metadata 與開局時間
+  let first;
+  while (!(first = await feed('window', gameId).catch(() => null))) {
+    if (my !== session) return;
+    $('#msg').textContent = '⏳ 比賽尚未開始（選角/載入中），每 15 秒重試…'; setStatus('等待開局', false);
+    await new Promise(r => setTimeout(r, 15000));
+    if (my !== session) return;
+  }
+  S.meta = first.gameMetadata;
+  S.t0 = Date.parse(first.frames[0].rfc460Timestamp);
+  await loadDD(S.meta.patchVersion);
+  if (my !== session) return;
+  Draft.fromFeed(S.meta);
+  S.players = {};
+  for (const [side, tm] of [['blue', S.meta.blueTeamMetadata], ['red', S.meta.redTeamMetadata]])
+    for (const p of tm.participantMetadata) S.players[p.participantId] = { ...p, side, name: cleanName(p.summonerName, S.g.teams[side].code) };
+
+  $('#msg').hidden = true; $('#board').hidden = false;
+  // 補抓歷史 → 再進入即時輪詢
+  const end = () => g.state !== 'completed' ? Date.now() - delayMs() : Infinity;
+  S.cursor = Math.floor(S.t0 / STEP) * STEP;
+  await catchUp(my, end, true);
+  if (my !== session) return;
+  liveLoop(my);
+}
+
+const delayMs = () => Math.max(20, +$('#delay').value || 60) * 1000;
+
+// 從 S.cursor 抓到 end()，平行 8 個
+async function catchUp(my, end, initial) {
+  const CONC = 8; let misses = 0;
+  while (S.cursor <= end() && !S.finished) {
+    const batch = [];
+    for (let i = 0; i < CONC && S.cursor + i * STEP <= end(); i++) batch.push(S.cursor + i * STEP);
+    if (!batch.length) break;
+    if (initial) setStatus(`補抓歷史資料… ${fmtT(S.snaps.at(-1)?.gt || 0)}`, false);
+    const res = await Promise.all(batch.map(t => Promise.all([feed('window', S.g.gameId, t), feed('details', S.g.gameId, t)]).catch(() => [null, null])));
+    if (my !== session) return;
+    let got = 0;
+    for (const [w, d] of res) {
+      if (!w?.frames?.length) continue;
+      got++;
+      const dmap = new Map((d?.frames || []).map(f => [f.rfc460Timestamp, f]));
+      // 每個 window 取最後一個有對應 details 的 frame
+      let wf = w.frames[w.frames.length - 1], df = dmap.get(wf.rfc460Timestamp) || d?.frames?.at(-1);
+      ingest(wf, df);
+    }
+    S.cursor += batch.length * STEP;
+    misses = got ? 0 : misses + 1;
+    if (end() === Infinity && misses >= 3) break; // 已完成的對局：抓不到資料代表結束
+  }
+  render();
+}
+
+function ingest(wf, df) {
+  const t = Date.parse(wf.rfc460Timestamp);
+  const prev = S.snaps.at(-1);
+  if (prev && t <= prev.t) return;
+  // 遊戲時間：暫停時 feed 停止產生 frame、恢復後時間戳直接跳過去，所以只累加實際進行中的間隔
+  let gt = t - S.t0;
+  if (prev) {
+    const gap = t - prev.t;
+    gt = prev.gt + (prev.w.gameState === 'paused' ? 0 : gap > 3 * STEP ? STEP : gap);
+  }
+  const cur = { t, gt, w: wf, d: df };
+  S.snaps.push(cur);
+  S.gold.push([gt, wf.blueTeam.totalGold - wf.redTeam.totalGold]);
+  if (WP.model) {
+    const p = WP.prob(wf, gt / 1000, S.g.teams);
+    const before = S.wp.at(-1)?.[1];
+    S.wp.push([gt, p]);
+    // 勝率在一個取樣間隔內大幅擺盪 → 記為事件
+    if (before != null && Math.abs(p - before) >= 0.1) {
+      const side = p > before ? 'blue' : 'red', T = S.g.teams;
+      addEv(cur, 'wp', side, `📈 勝率擺盪：${esc(T.blue.code)} ${pctWP(before)} → <b>${pctWP(p)}</b>`, Math.abs(p - before) >= 0.2);
+    }
+  }
+  if (prev) diff(prev, cur);
+  if (wf.gameState === 'finished' && !S.finished) { S.finished = true; addEv(cur, 'obj', '', '🏁 <b>比賽結束</b>', true); }
+}
+
+// ---------- 事件推導 ----------
+function addEv(snap, type, side, html, big) { S.events.push({ t: snap.gt, type, side, html, big }); }
+const pTag = id => { const p = S.players[id]; return `<img src="${champImg(p.championId)}" alt="">${esc(p.name)}`; };
+const teamCode = side => S.g.teams[side].code;
+
+function diff(a, b) {
+  const sides = ['blue', 'red'];
+  // 擊殺
+  const killers = [], victims = [];
+  for (const side of sides) {
+    const pa = Object.fromEntries(a.w[side + 'Team'].participants.map(p => [p.participantId, p]));
+    for (const p of b.w[side + 'Team'].participants) {
+      const o = pa[p.participantId]; if (!o) continue;
+      for (let i = 0; i < p.kills - o.kills; i++) killers.push(p.participantId);
+      for (let i = 0; i < p.deaths - o.deaths; i++) victims.push(p.participantId);
+      if (p.level > o.level && [6, 11, 16].includes(p.level)) addEv(b, 'lvl', side, `${pTag(p.participantId)} 升到 ${p.level} 級`);
+    }
+  }
+  const totalA = a.w.blueTeam.totalKills + a.w.redTeam.totalKills;
+  victims.forEach((v, i) => {
+    const vSide = S.players[v].side;
+    const ki = killers.findIndex(k => S.players[k].side !== vSide);
+    const k = ki >= 0 ? killers.splice(ki, 1)[0] : null;
+    const fb = totalA === 0 && i === 0;
+    addEv(b, 'kill', vSide === 'blue' ? 'red' : 'blue',
+      `${fb ? '🩸 <b>首殺</b> ' : '⚔️ '}${k ? pTag(k) : '<span class="muted">?</span>'} 擊殺 ${pTag(v)}`, fb);
+  });
+  // 物件
+  for (const side of sides) {
+    const ta = a.w[side + 'Team'], tb = b.w[side + 'Team'], c = teamCode(side);
+    for (const dr of tb.dragons.slice(ta.dragons.length))
+      addEv(b, 'obj', side, `🐉 ${c} 拿下 <b>${DRAGON[dr] || dr}</b>（第 ${tb.dragons.length} 條）`, dr === 'elder' || tb.dragons.length === 4);
+    if (tb.barons > ta.barons) addEv(b, 'obj', side, `👾 ${c} 拿下 <b>巴龍</b>`, true);
+    if (tb.towers > ta.towers) addEv(b, 'obj', side, `🗼 ${c} 推掉 ${tb.towers - ta.towers} 座塔（共 ${tb.towers}）`, a.w.blueTeam.towers + a.w.redTeam.towers === 0);
+    if (tb.inhibitors > ta.inhibitors) addEv(b, 'obj', side, `💥 ${c} 破壞 <b>水晶兵營</b>`, true);
+  }
+  // 出裝
+  if (a.d && b.d) {
+    const ia = Object.fromEntries(a.d.participants.map(p => [p.participantId, p.items]));
+    for (const p of b.d.participants) {
+      const before = [...(ia[p.participantId] || [])];
+      for (const id of p.items) {
+        const k = before.indexOf(id);
+        if (k >= 0) { before.splice(k, 1); continue; }
+        if (isMajorItem(id)) addEv(b, 'item', S.players[p.participantId].side,
+          `🛒 ${pTag(p.participantId)} 完成 <img src="${itemImg(id)}" alt=""> ${esc(itemName(id))}`);
+      }
+    }
+  }
+}
+
+// ---------- 即時輪詢 ----------
+async function liveLoop(my) {
+  while (my === session) {
+    if (S.g.state === 'completed' || S.finished) { setStatus(S.finished ? '已結束' : '已完成（回顧）', false); return; }
+    try {
+      await catchUp(my, () => Date.now() - delayMs(), false);
+      if (my !== session) return;
+      const last = S.snaps.at(-1);
+      setStatus(last ? `直播中 · 遊戲時間 ${fmtT(last.gt)}（延遲 ${Math.round((Date.now() - last.t) / 1000)}s）` : '直播中', true);
+    } catch (e) { setStatus('連線錯誤，重試中…', false); }
+    await new Promise(r => setTimeout(r, 5000));
+  }
+}
+
+// ---------- 畫面 ----------
+function render() {
+  const last = S?.snaps.at(-1); if (!last) return;
+  const { w, d } = last, B = w.blueTeam, R = w.redTeam, T = S.g.teams;
+  const dr = list => `<div class="drakes">${list.map(x => `<span class="drake">${DRAGON[x] || x}</span>`).join('')}</div>`;
+  const gd = B.totalGold - R.totalGold;
+  $('#score').innerHTML = `
+    <div class="team blue"><img src="${esc(T.blue.image)}" alt=""><div><div class="code">${esc(T.blue.code)}</div><div class="objs">${esc(T.blue.name)}</div>${dr(B.dragons)}</div></div>
+    <div class="center"><div class="kills"><span class="b">${B.totalKills}</span> : <span class="r">${R.totalKills}</span></div>
+      <div class="clock">⏱ ${fmtT(last.gt)} ${w.gameState === 'paused' ? '⏸ 暫停' : ''}</div></div>
+    <div class="team red"><img src="${esc(T.red.image)}" alt=""><div><div class="code">${esc(T.red.code)}</div><div class="objs">${esc(T.red.name)}</div>${dr(R.dragons)}</div></div>
+    ${S.wp.length ? wpBar(S.wp.at(-1)[1], T) : ''}
+    <div class="stats" style="grid-column:1/-1">
+      <div>${fmtG(B.totalGold)}</div><div>經濟 ${gd >= 0 ? '<span style="color:var(--blue)">+' : '<span style="color:var(--red)">'}${fmtG(gd)}</span></div><div>${fmtG(R.totalGold)}</div>
+      <div>${B.towers}</div><div>防禦塔</div><div>${R.towers}</div>
+      <div>${B.inhibitors}</div><div>水晶兵營</div><div>${R.inhibitors}</div>
+      <div>${B.barons}</div><div>巴龍</div><div>${R.barons}</div>
+      <div>${B.dragons.length}</div><div>小龍</div><div>${R.dragons.length}</div>
+    </div>`;
+  $('#blueName').textContent = `🔵 ${T.blue.code} · 藍方`;
+  $('#redName').textContent = `🔴 ${T.red.code} · 紅方`;
+  const det = Object.fromEntries((d?.participants || []).map(p => [p.participantId, p]));
+  $('#blueTbl').innerHTML = teamTable(B.participants, det);
+  $('#redTbl').innerHTML = teamTable(R.participants, det);
+  drawChart();
+  renderEvents();
+  Review.render();
+}
+
+function teamTable(parts, det) {
+  const rows = parts.map(p => {
+    const m = S.players[p.participantId], x = det[p.participantId] || {};
+    const ks = dd.runes[x.perkMetadata?.perks?.[0]];
+    const items = [...(x.items || [])];
+    const slots = items.map(id => `<img src="${itemImg(id)}" title="${esc(itemName(id))}" alt="" onerror="this.style.visibility='hidden'">`).join('')
+      + '<span></span>'.repeat(Math.max(0, 7 - items.length));
+    const hp = p.maxHealth ? Math.round(p.currentHealth / p.maxHealth * 100) : 0;
+    return `<tr>
+      <td><div class="champ"><div class="ico"><img src="${champImg(m.championId)}" alt="">${ks ? `<img class="ks" src="${DD}/cdn/img/${ks.icon}" title="${esc(ks.name)}" alt="">` : ''}<span class="lvl">${p.level}</span></div>
+        <div><div class="name">${esc(m.name)}</div><div class="role">${ROLE[m.role] || m.role} · ${esc(champName(m.championId))}</div>
+        <div class="hp ${hp ? '' : 'dead'}"><i style="width:${hp}%"></i></div></div></div></td>
+      <td><b>${p.kills}/${p.deaths}/${p.assists}</b>${x.killParticipation != null ? `<div class="muted">參團 ${Math.round(x.killParticipation * 100)}%</div>` : ''}</td>
+      <td>${p.creepScore}</td>
+      <td>${fmtG(p.totalGold)}</td>
+      <td>${x.championDamageShare != null ? Math.round(x.championDamageShare * 100) + '%' : '-'}</td>
+      <td>${x.wardsPlaced ?? '-'}/${x.wardsDestroyed ?? '-'}</td>
+      <td><div class="items">${slots}</div></td></tr>`;
+  }).join('');
+  return `<tr><th>選手</th><th>K/D/A</th><th>CS</th><th>經濟</th><th>傷害%</th><th>插/排眼</th><th>出裝</th></tr>${rows}`;
+}
+
+function drawChart() {
+  const maxG = Math.max(2000, ...S.gold.map(p => Math.abs(p[1])));
+  drawDiff($('#chart'), S.gold, maxG, '+' + fmtG(maxG), '-' + fmtG(maxG), [],
+    v => `${v >= 0 ? S.g.teams.blue.code + ' +' : S.g.teams.red.code + ' +'}${fmtG(Math.abs(v))}`);
+  const T = S.g.teams;
+  drawDiff($('#wpChart'), S.wp.map(([t, p]) => [t, p - 0.5]), 0.5, `${T.blue.code} 100%`, `${T.red.code} 100%`, [0.25, -0.25],
+    v => `${T.blue.code} ${((v + 0.5) * 100).toFixed(1)}% : ${((0.5 - v) * 100).toFixed(1)}% ${T.red.code}`);
+  const p = S.wp.at(-1)?.[1];
+  $('#wpNow').innerHTML = p == null ? '' :
+    `<b style="color:var(--blue)">${esc(T.blue.code)} ${(p * 100).toFixed(1)}%</b> : <b style="color:var(--red)">${(100 - p * 100).toFixed(1)}% ${esc(T.red.code)}</b>`;
+}
+
+// 以中線為 0 的雙色面積圖（上藍下紅）
+function drawDiff(svg, pts, maxV, topLabel, botLabel, guides = [], fmt = String) {
+  const W = svg.clientWidth || 600, H = 120, id = svg.id;
+  svg._hover = { pts, fmt, W, maxT: pts.at(-1)?.[0], y: v => H / 2 - v / maxV * (H / 2 - 8) };
+  if (pts.length < 2) { svg.innerHTML = ''; return; }
+  const maxT = pts.at(-1)[0];
+  const x = t => t / maxT * W, y = v => H / 2 - v / maxV * (H / 2 - 8);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `
+    <defs><clipPath id="${id}-top"><rect width="${W}" height="${H / 2}"/></clipPath><clipPath id="${id}-bot"><rect y="${H / 2}" width="${W}" height="${H / 2}"/></clipPath></defs>
+    ${guides.map(v => `<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)" stroke-dasharray="3 4"/>`).join('')}
+    <path d="${line}L${W},${H / 2}L0,${H / 2}Z" style="fill:var(--blue);opacity:.3" clip-path="url(#${id}-top)"/>
+    <path d="${line}L${W},${H / 2}L0,${H / 2}Z" style="fill:var(--red);opacity:.3" clip-path="url(#${id}-bot)"/>
+    <path d="${line}" style="fill:none;stroke:var(--text)" stroke-width="1.5"/>
+    <line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" style="stroke:var(--line)"/>
+    <text x="4" y="12" style="fill:var(--muted)" font-size="11">${esc(topLabel)}</text>
+    <text x="4" y="${H - 4}" style="fill:var(--muted)" font-size="11">${esc(botLabel)}</text>
+    <text x="${W - 4}" y="${H - 4}" style="fill:var(--muted)" font-size="11" text-anchor="end">${fmtT(maxT)}</text>
+    <g class="hover" style="display:none"><line y1="0" y2="${H}" style="stroke:var(--gold)"/><circle r="3.5" style="fill:var(--gold)"/>
+      <text y="14" font-size="12" style="fill:var(--text);paint-order:stroke;stroke:var(--bg);stroke-width:3px"></text></g>`;
+}
+
+// 滑鼠移到圖上顯示該時間點的數值
+function chartHover(e) {
+  const svg = e.currentTarget, h = svg._hover, g = svg.querySelector('.hover');
+  if (!h?.pts.length || !g) return;
+  if (e.type === 'mouseleave') { g.style.display = 'none'; return; }
+  const r = svg.getBoundingClientRect(), t = (e.clientX - r.left) / r.width * h.maxT;
+  const pt = h.pts.reduce((a, b) => Math.abs(b[0] - t) < Math.abs(a[0] - t) ? b : a);
+  const x = pt[0] / h.maxT * h.W, y = h.y(pt[1]);
+  g.style.display = '';
+  g.querySelector('line').setAttribute('x1', x); g.querySelector('line').setAttribute('x2', x);
+  g.querySelector('circle').setAttribute('cx', x); g.querySelector('circle').setAttribute('cy', y);
+  const txt = g.querySelector('text');
+  txt.textContent = `${fmtT(pt[0])}  ${h.fmt(pt[1])}`;
+  const left = x > h.W / 2;
+  txt.setAttribute('x', left ? x - 6 : x + 6); txt.setAttribute('text-anchor', left ? 'end' : 'start');
+}
+
+function renderEvents() {
+  const on = new Set([...document.querySelectorAll('#filters input:checked')].map(i => i.dataset.f));
+  $('#evList').innerHTML = S.events.filter(e => on.has(e.type)).slice().reverse()
+    .map(e => `<div class="ev ${e.side} ${e.big ? 'big' : ''}"><span class="t">${fmtT(e.t)}</span><span>${e.html}</span></div>`).join('')
+    || '<div class="muted">尚無事件</div>';
+}
+
+// ---------- 直播嵌入 ----------
+function updateStream() {
+  const box = $('#stream'), on = $('#showStream').checked, id = $('#ytId').value.trim();
+  box.hidden = !on;
+  box.innerHTML = on && id ? `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&mute=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>` : '';
+}
+
+// ---------- 啟動 ----------
+// 頂列設定（延遲、直播、自動跟隨）記在瀏覽器裡，重新整理不會被重設
+const PREFS = { delay: 'value', ytId: 'value', showStream: 'checked', follow: 'checked' };
+for (const [id, prop] of Object.entries(PREFS)) {
+  try { const v = localStorage.getItem('pref:' + id); if (v !== null) $('#' + id)[prop] = prop === 'checked' ? v === '1' : v; } catch {}
+  $('#' + id).addEventListener('change', e => { try { localStorage.setItem('pref:' + id, prop === 'checked' ? (e.target.checked ? '1' : '0') : e.target.value); } catch {} });
+}
+updateStream();
+Draft.init();
+for (const c of ['#chart', '#wpChart']) for (const ev of ['mousemove', 'mouseleave']) $(c).addEventListener(ev, chartHover);
+$('#gameSel').onchange = e => openGame(e.target.value);
+$('#reloadBtn').onclick = () => loadGames();
+$('#showStream').onchange = updateStream;
+$('#ytId').onchange = updateStream;
+$('#filters').onchange = () => S && renderEvents();
+window.addEventListener('resize', () => S?.snaps.length && drawChart());
+setInterval(() => S?.snaps.length && render(), 5000);
+
+// 每分鐘刷新賽程；自動跟隨模式下切到新的直播對局
+setInterval(async () => {
+  try {
+    if (!WP.model) {
+      await WP.load();
+      if (WP.model && S) { S.wp = S.snaps.map(s => [s.gt, WP.prob(s.w, s.gt / 1000, S.g.teams)]); render(); Draft.render(); }
+    }
+    await loadGames();
+    if (!$('#follow').checked) return;
+    const live = games.find(g => g.state === 'inProgress');
+    if (live && live.gameId !== S?.g.gameId && (!S || S.finished || S.g.state !== 'inProgress')) {
+      $('#gameSel').value = live.gameId; openGame(live.gameId);
+    }
+    if (S) { const g = games.find(x => x.gameId === S.g.gameId); if (g) S.g.state = g.state; }
+  } catch {}
+}, 60000);
+
+loadGames().then(list => { if (list.length) { $('#gameSel').value = list[0].gameId; openGame(list[0].gameId); } })
+  .catch(e => { $('#msg').textContent = '載入賽程失敗：' + e.message; });
+</script>
+</body>
+</html>
