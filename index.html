@@ -235,7 +235,7 @@
       <div class="card" id="score"></div>
       <div class="card" id="review" hidden></div>
       <div class="card"><h2>即時勝率走勢 <span id="wpInfo" class="muted" style="font-weight:400"></span></h2><div id="wpNow" class="wpnow"></div><svg id="wpChart" class="chart" preserveAspectRatio="none"></svg></div>
-      <div class="card"><h2>經濟差（藍 − 紅）</h2><svg id="chart" class="chart" preserveAspectRatio="none"></svg></div>
+      <div class="card"><h2>經濟差</h2><svg id="chart" class="chart" preserveAspectRatio="none"></svg></div>
       <div class="card blueT"><h2 id="blueName">藍方</h2><table id="blueTbl"></table></div>
       <div class="card redT"><h2 id="redName">紅方</h2><table id="redTbl"></table></div>
     </div>
@@ -562,7 +562,7 @@ function render() {
     <div class="team red"><img src="${esc(T.red.image)}" alt=""><div><div class="code">${esc(T.red.code)}</div><div class="objs">${esc(T.red.name)}</div>${dr(R.dragons)}</div></div>
     ${S.wp.length ? wpBar(S.wp.at(-1)[1], T) : ''}
     <div class="stats" style="grid-column:1/-1">
-      <div>${fmtG(B.totalGold)}</div><div>經濟 ${gd >= 0 ? '<span style="color:var(--blue)">+' : '<span style="color:var(--red)">'}${fmtG(gd)}</span></div><div>${fmtG(R.totalGold)}</div>
+      <div>${fmtG(B.totalGold)}</div><div>經濟 ${gd === 0 ? '平' : `<span style="color:var(--${gd > 0 ? 'blue' : 'red'})">${esc(T[gd > 0 ? 'blue' : 'red'].code)} +${fmtG(Math.abs(gd))}</span>`}</div><div>${fmtG(R.totalGold)}</div>
       <div>${B.towers}</div><div>防禦塔</div><div>${R.towers}</div>
       <div>${B.inhibitors}</div><div>水晶兵營</div><div>${R.inhibitors}</div>
       <div>${B.barons}</div><div>巴龍</div><div>${R.barons}</div>
@@ -602,7 +602,7 @@ function teamTable(parts, det) {
 
 function drawChart() {
   const maxG = Math.max(2000, ...S.gold.map(p => Math.abs(p[1])));
-  drawDiff($('#chart'), S.gold, maxG, '+' + fmtG(maxG), '-' + fmtG(maxG), [],
+  drawDiff($('#chart'), S.gold, maxG, `${S.g.teams.blue.code} +${fmtG(maxG)}`, `${S.g.teams.red.code} +${fmtG(maxG)}`, [],
     v => `${v >= 0 ? S.g.teams.blue.code + ' +' : S.g.teams.red.code + ' +'}${fmtG(Math.abs(v))}`);
   const T = S.g.teams;
   drawDiff($('#wpChart'), S.wp.map(([t, p]) => [t, p - 0.5]), 0.5, `${T.blue.code} 100%`, `${T.red.code} 100%`, [0.25, -0.25],
