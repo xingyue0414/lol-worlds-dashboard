@@ -370,7 +370,9 @@ async function openGame(gameId) {
   if (!dd.ver) await loadDD(null);
   await WP.load();
   if (my !== session) return;
-  Draft.open(g, games);
+  // 等選角面板就緒（含 3MB 歷史資料）再往下，避免開局資料先到、套用到舊的面板
+  await Draft.open(g, games);
+  if (my !== session) return;
 
   // 第一個 window（不帶 startingTime）給出 metadata 與開局時間
   let first;
@@ -384,7 +386,7 @@ async function openGame(gameId) {
   S.t0 = Date.parse(first.frames[0].rfc460Timestamp);
   await loadDD(S.meta.patchVersion);
   if (my !== session) return;
-  Draft.fromFeed(S.meta);
+  Draft.fromFeed(S.meta, gameId);
   S.players = {};
   for (const [side, tm] of [['blue', S.meta.blueTeamMetadata], ['red', S.meta.redTeamMetadata]])
     for (const p of tm.participantMetadata) S.players[p.participantId] = { ...p, side, name: cleanName(p.summonerName, S.g.teams[side].code) };

@@ -172,9 +172,12 @@ const Draft = (() => {
     $('#draftCard').hidden = false;
     render();
     loadOfficial(st);
-    // Fearless：同系列賽前面幾局已選過的英雄
+    loadLocked(st, g, allGames); // 不等它：open() 結束時 st 就已就緒，呼叫端才能接著套用 feed
+  }
+
+  // Fearless：同系列賽前面幾局已選過的英雄
+  async function loadLocked(my, g, allGames) {
     const prev = allGames.filter(x => x.matchId === g.matchId && x.gameId !== g.gameId && x.gameNumber < g.gameNumber);
-    const my = st;
     const metas = await Promise.all(prev.map(x => feed('window', x.gameId).catch(() => null)));
     if (my !== st) return;
     for (const w of metas) for (const tm of [w?.gameMetadata?.blueTeamMetadata, w?.gameMetadata?.redTeamMetadata])
@@ -216,8 +219,8 @@ const Draft = (() => {
   }
 
   // 開局後 feed 給出雙方英雄 → 補齊尚未輸入的選角
-  function fromFeed(meta) {
-    if (!st || st.fromFeed) return;
+  function fromFeed(meta, gameId) {
+    if (!st || st.fromFeed || st.gameId !== gameId) return;
     st.fromFeed = true;
     // 實際上場的先發覆蓋預測名單
     for (const [side, tm] of [['blue', meta.blueTeamMetadata], ['red', meta.redTeamMetadata]])
