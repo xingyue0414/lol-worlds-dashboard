@@ -1,6 +1,6 @@
 // 即時勝率：讀取訓練好的模型（winprob_model.json）
 //   v1：build_winprob.py 的邏輯斯迴歸（只看當下場面）
-//   v2：train_v2.py 的 LightGBM 或邏輯斯迴歸（另含 buff 生效、經濟趨勢、各路經濟），特徵需與 train_v2.py 的 features() 一致
+//   v2：train_v2.py 的 LightGBM 或邏輯斯迴歸（另含 buff 生效、經濟趨勢、各路經濟、陣容勝率），特徵需與 train_v2.py 的 features() 一致
 const WP = (() => {
   let model = null;
   const ROLES = ['top', 'jungle', 'mid', 'bottom', 'support'];
@@ -16,6 +16,9 @@ const WP = (() => {
   }
 
   const eloOf = team => model.elo[team?.id] ?? model.eloInit;
+  // 陣容勝率：雙方英雄歷史勝率（log-odds）加總之差；資料太少的英雄視為 50%（= 0）
+  const compWr = (blue = [], red = []) => model.champs
+    ? blue.reduce((a, c) => a + (model.champs[c] ?? 0), 0) - red.reduce((a, c) => a + (model.champs[c] ?? 0), 0) : 0;
   const sigmoid = z => 1 / (1 + Math.exp(-z));
 
   // ---------- v1 ----------
@@ -41,7 +44,7 @@ const WP = (() => {
   const gdOf = f => (f.blueTeam.totalGold - f.redTeam.totalGold) / 1000;
 
   // snaps：{gt(ms), w(window frame)} 依時間排序；i：要計算的那一筆；roleOf：participantId → 位置
-  function featuresV2(snaps, i, roleOf, eloDiff) {
+  function featuresV2(snaps, i, roleOf, eloDiff, comp) {
     const s = snaps[i], f = s.w, b = f.blueTeam, r = f.redTeam;
     let prev = null; // 2 分鐘前的狀態（經濟趨勢）
     for (let j = i; j >= 0; j--) if (s.gt - snaps[j].gt >= 120000) { prev = snaps[j]; break; }
@@ -64,7 +67,7 @@ const WP = (() => {
       baron_active: active(t => t.barons, model.buff.baron), elder_active: active(elders, model.buff.elder),
       gold_trend: prev ? gdOf(f) - gdOf(prev.w) : 0,
       ...Object.fromEntries(ROLES.map(role => [`gold_${role}`, ((pb[role]?.totalGold || 0) - (pr[role]?.totalGold || 0)) / 1000])),
-      levels: lv(b) - lv(r), elo: eloDiff / 100,
+      levels: lv(b) - lv(r), elo: eloDiff / 100, comp_wr: comp,
     };
   }
 
@@ -85,19 +88,21 @@ const WP = (() => {
     const eloDiff = eloOf(S.g.teams.blue) - eloOf(S.g.teams.red);
     if (model.version !== 2) return probV1(S.snaps[i].w, S.snaps[i].gt / 1000, S.g.teams);
     const roleOf = Object.fromEntries(Object.entries(S.players).map(([id, p]) => [id, p.role]));
-    return evalV2(featuresV2(S.snaps, i, roleOf, eloDiff));
+    const ps = Object.values(S.players), champs = side => ps.filter(p => p.side === side).map(p => p.championId);
+    return evalV2(featuresV2(S.snaps, i, roleOf, eloDiff, compWr(champs('blue'), champs('red'))));
   }
 
-  function pregame(teams) {
+  // picks：{blue: [英雄 id], red: [...]}（選角中已選出的英雄，可省略）
+  function pregame(teams, picks) {
     const eloDiff = eloOf(teams.blue) - eloOf(teams.red);
     if (model.version !== 2) {
       const empty = { totalGold: 0, totalKills: 0, towers: 0, dragons: [], barons: 0, inhibitors: 0 };
       return probV1({ blueTeam: empty, redTeam: empty }, 0, teams);
     }
-    return evalV2({ elo: eloDiff / 100 });
+    return evalV2({ elo: eloDiff / 100, comp_wr: compWr(picks?.blue, picks?.red) });
   }
 
-  return { load, probAt, pregame, elo: t => model ? Math.round(eloOf(t)) : null, get model() { return model; } };
+  return { load, probAt, pregame, usesDraft: () => !!model?.champs, elo: t => model ? Math.round(eloOf(t)) : null, get model() { return model; } };
 })();
 
 const pctWP = p => (p * 100).toFixed(0) + '%';

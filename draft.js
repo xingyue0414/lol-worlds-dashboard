@@ -336,7 +336,11 @@ const Draft = (() => {
         <div class="bans">${slots('ban')}</div><div class="picks">${slots('pick')}</div></div>`;
     };
     $('#draftSides').innerHTML = col('blue') + col('red');
-    $('#pregame').innerHTML = WP.model ? wpBar(WP.pregame(T), T, `賽前勝率（Elo ${WP.elo(T.blue)} : ${WP.elo(T.red)}）`) : '';
+    // 賽前勝率：Elo + 已選出的英雄（陣容勝率），每選一隻就更新
+    const picked = side => st.actions.filter((c, i) => c && ORDER[i][0] === side && ORDER[i][1] === 'pick');
+    const withDraft = WP.usesDraft?.() && (picked('blue').length || picked('red').length);
+    $('#pregame').innerHTML = WP.model ? wpBar(WP.pregame(T, { blue: picked('blue'), red: picked('red') }), T,
+      `賽前勝率（Elo ${WP.elo(T.blue)} : ${WP.elo(T.red)}${withDraft ? ' ＋ 陣容' : ''}）`) : '';
 
     // 下一手預測
     let head = '', list = '';

@@ -30,8 +30,36 @@ FEATURES = ['minutes', 'gold', 'total_gold', 'kills', 'towers', 'inhibs', 'drago
             'baron_active', 'elder_active', 'gold_trend', 'gold_top', 'gold_jungle', 'gold_mid', 'gold_bottom',
             'gold_support', 'levels', 'elo']
 # 單調限制：這些優勢只會提高勝率（避免模型在資料稀少處學出反直覺的結果）
-MONOTONE = {'gold': 1, 'towers': 1, 'inhibs': 1, 'dragons': 1, 'soul': 1, 'elder': 1, 'barons': 1,
+MONOTONE = {'comp_wr': 1, 'gold': 1, 'towers': 1, 'inhibs': 1, 'dragons': 1, 'soul': 1, 'elder': 1, 'barons': 1,
             'baron_active': 1, 'elder_active': 1, 'levels': 1, 'elo': 1}
+
+
+# 陣容特徵（藍 − 紅）：5 隻英雄過去勝率（log-odds）的加總；每局只用「這局之前」的比賽統計，避免把答案算進特徵
+# 也試過前期強度（15 分經濟差）、後期強度（長局勝率），太雜反而讓驗證分數變差，所以不用
+DRAFT_FEATURES = ['comp_wr']
+CHAMP_PRIOR = 60  # 貝氏平滑：樣本少的英雄往 50% 靠攏（20/60/150 驗證結果相近，取中間值）
+
+
+class ChampStats:
+    def __init__(self):
+        self.s = defaultdict(lambda: [0, 0])  # 局數, 勝場
+
+    def value(self, c):
+        n, w = self.s[c]
+        p = (w + CHAMP_PRIOR * 0.5) / (n + CHAMP_PRIOR)
+        return math.log(p / (1 - p))
+
+    def comp(self, blue, red):
+        return [sum(self.value(c) for c in blue) - sum(self.value(c) for c in red)]
+
+    def update(self, blue, red, blue_win):
+        for champs, win in ((blue, blue_win), (red, not blue_win)):
+            for c in champs:
+                self.s[c][0] += 1
+                self.s[c][1] += win
+
+    def table(self):
+        return {c: round(self.value(c), 4) for c, st in self.s.items() if st[0] >= 3}
 
 
 def label_games(data):
@@ -163,26 +191,31 @@ def main():
 
     # Elo（依時間順序；同一天同系列以 gameId 排序）
     order = sorted((gid for gid in labels if gid in history), key=lambda g: (history[g]['date'], g))
-    elo, rows = {}, []
+    elo, rows, champs = {}, [], ChampStats()
     for gid in order:
         g, bw = data['games'][gid], labels[gid]
         bt, rt = g['teams']
         eb, er = elo.get(bt, ELO_INIT), elo.get(rt, ELO_INIT)
-        rows.append((gid, eb - er, bw))
+        pb = [p['champ'] for p in history[gid]['blue']['picks']]
+        pr = [p['champ'] for p in history[gid]['red']['picks']]
+        rows.append((gid, eb - er, bw, champs.comp(pb, pr)))  # 先取「賽前」的英雄數據，再用本局結果更新
+        champs.update(pb, pr, bw)
         exp = 1 / (1 + 10 ** ((er - eb) / 400))
         d = ELO_K * (bw - exp)
         elo[bt], elo[rt] = eb + d, er - d
 
     split = int(len(rows) * 0.85)
-    X, X1, y, T, is_test = [], [], [], [], []
-    for i, (gid, ed, bw) in enumerate(rows):
+    X, X1, C, y, T, is_test = [], [], [], [], [], []
+    for i, (gid, ed, bw, comp) in enumerate(rows):
         smp = data['games'][gid]['samples']
         for k in range(-1, len(smp)):
             X.append(features(smp, k, ed)); y.append(int(bw)); T.append(0 if k < 0 else smp[k]['t'] / 60)
             X1.append(v1_features(None if k < 0 else smp[k], 0 if k < 0 else smp[k]['t'], ed))
+            C.append(comp)
             is_test.append(i >= split)
     X, X1, y, T, te = np.array(X), np.array(X1), np.array(y), np.array(T), np.array(is_test)
     P1 = np.array([v1_prob(v1, f) for f in X1])
+    XD = np.hstack([X, np.array(C)])  # 加上陣容特徵
     tr = ~te
     print(f'{len(rows)} 局（訓練 {split}、驗證 {len(rows) - split}），樣本 {tr.sum()} / {te.sum()}，藍方勝率 {y.mean():.1%}')
 
@@ -201,19 +234,35 @@ def main():
                       callbacks=[lgb.early_stopping(100, verbose=False)])
     n_trees = max(50, probe.best_iteration)
     gbm = lgb.train(params, lgb.Dataset(X[tr], y[tr]), n_trees)
+    # 4. 加上陣容特徵
+    params_d = dict(params, monotone_constraints=[MONOTONE.get(f, 0) for f in FEATURES + DRAFT_FEATURES])
+    probe_d = lgb.train(params_d, lgb.Dataset(XD[fit_m], y[fit_m]), 2000, valid_sets=[lgb.Dataset(XD[val_m], y[val_m])],
+                        callbacks=[lgb.early_stopping(100, verbose=False)])
+    n_trees_d = max(50, probe_d.best_iteration)
+    gbm_d = lgb.train(params_d, lgb.Dataset(XD[tr], y[tr]), n_trees_d)
+    lr_d = LogisticRegression(C=1.0, max_iter=2000).fit(XD[tr], y[tr])
 
     print(f'\n驗證集（最近 {len(rows) - split} 局，LightGBM {n_trees} 棵樹）：')
     report('網站目前模型*', y[te], P1[te], T[te])
     ll1 = report('v1 方法重訓', y[te], base.predict_proba(X1[te])[:, 1], T[te])
     ll2 = report('邏輯斯迴歸 v2', y[te], lr.predict_proba(X[te])[:, 1], T[te])
     ll3 = report('LightGBM v2', y[te], gbm.predict(X[te]), T[te])
+    ll4 = report('邏輯斯 v2+陣容', y[te], lr_d.predict_proba(XD[te])[:, 1], T[te])
+    ll5 = report('LightGBM v2+陣容', y[te], gbm_d.predict(XD[te]), T[te])
+    imp_d = dict(zip(FEATURES + DRAFT_FEATURES, gbm_d.feature_importance('gain')))
+    print(f'陣容勝率重要度占比：{imp_d["comp_wr"] / sum(imp_d.values()):.1%}')
     imp = sorted(zip(FEATURES, gbm.feature_importance('gain')), key=lambda x: -x[1])
     print('LightGBM 特徵重要度：' + '、'.join(f'{f}' for f, _ in imp[:8]))
     print('* 網站目前模型的訓練資料包含這批驗證對局，分數偏高，僅供參考；公平比較看「v1 方法重訓」')
 
     if '--dry-run' in sys.argv:
         return
-    best = min([('v1', ll1), ('lr', ll2), ('gbm', ll3)], key=lambda x: x[1])[0]
+    best = min([('v1', ll1), ('lr', ll2), ('gbm', ll3), ('lr_d', ll4), ('gbm_d', ll5)], key=lambda x: x[1])[0]
+    if best.endswith('_d'):  # 陣容版：特徵加上陣容，並輸出英雄數據表（用全部對局統計）
+        best, X, lr, gbm, params, n_trees, ll2, ll3 = best[:-2], XD, lr_d, gbm_d, params_d, n_trees_d, ll4, ll5
+        feats = FEATURES + DRAFT_FEATURES
+    else:
+        feats = FEATURES
     if best == 'v1':
         print('新特徵沒有比 v1 方法好，保留目前模型')
         return
@@ -223,8 +272,10 @@ def main():
     for g in history.values():
         for side in ('blue', 'red'):
             teams[g[side]['teamId']] = g[side]['code']
-    out = {'version': 2, 'features': FEATURES, 'games': len(rows), 'elo': {k: round(v, 1) for k, v in elo.items()},
+    out = {'version': 2, 'features': feats, 'games': len(rows), 'elo': {k: round(v, 1) for k, v in elo.items()},
            'teams': teams, 'eloInit': ELO_INIT, 'buff': {'baron': BARON_BUFF, 'elder': ELDER_BUFF}}
+    if feats != FEATURES:
+        out['champs'] = champs.table()
     if best == 'gbm':
         final = lgb.train(params, lgb.Dataset(X, y), n_trees)
         trees = export_trees(final)
