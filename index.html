@@ -31,7 +31,6 @@
   .grid2 { grid-template-columns: minmax(0, 1fr); } .blueT, .redT { overflow-x: auto; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
   .card h2 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .5px; }
-  #stream iframe { width: 100%; aspect-ratio: 16/9; border: 0; border-radius: 8px; }
   #score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; }
   .team { display: flex; align-items: center; gap: 10px; min-width: 0; } .team > div { min-width: 0; }
   .team.red { flex-direction: row-reverse; text-align: right; }
@@ -137,7 +136,6 @@
   .card h2::before { content: ''; display: inline-block; width: 4px; height: 14px; margin-right: 8px; vertical-align: -1px; background: currentColor; }
   #draftCard summary::before { content: none; }
   #draftCard summary h2::after { content: ' ▾'; color: var(--muted); } #draftCard:not([open]) summary h2::after { content: ' ▸'; }
-  #stream iframe { border-radius: 0; }
 
   #score { background: var(--panel); border-top: 3px solid var(--gold); }
   .team.blue { border-left: 4px solid var(--blue); padding-left: 10px; }
@@ -170,6 +168,11 @@
   .ev .t { font-family: var(--display); font-size: 15px; font-weight: 700; }
   .ev.blue, .ev.red { padding-left: 8px; }
   .ev.big { background: #c8aa6e24; }
+  .ev img { border-radius: 0; }
+  .etag { display: inline-block; min-width: 38px; margin-right: 8px; padding: 0 5px; border: 1px solid var(--line); background: var(--bg);
+    color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 1px; text-align: center; line-height: 18px; vertical-align: 1px; }
+  .ev.blue .etag { color: var(--blue); border-color: #0ac8ff55; } .ev.red .etag { color: var(--red); border-color: #ff465555; }
+  .ev .etag.gold { background: var(--gold); border-color: var(--gold); color: var(--ink); }
 
   #review { border-top: 3px solid var(--gold); background: #0c1930; }
   .rv-list li::marker { color: var(--gold); font-family: var(--display); font-weight: 700; }
@@ -197,14 +200,11 @@
   <button id="reloadBtn" title="重新整理賽程">↻</button>
   <label><input type="checkbox" id="follow" checked> 自動跟隨直播</label>
   <label>延遲 <input type="number" id="delay" value="60" min="20" max="600" step="5" style="width:64px"> 秒</label>
-  <label><input type="checkbox" id="showStream"> 顯示直播</label>
-  <input id="ytId" value="jCBkw2pcR3Y" style="width:120px" title="YouTube 影片 ID">
   <span id="status"><span class="dot"></span><span id="statusText">—</span></span>
 </header>
 
 <main>
   <div class="grid2">
-    <div id="stream" class="card" hidden></div>
     <details id="draftCard" class="card" open hidden>
       <summary><h2>選角 BP · 即時選用機率</h2></summary>
       <div id="pregame" class="pregame"></div>
@@ -446,15 +446,17 @@ function ingest(wf, df) {
     // 勝率在一個取樣間隔內大幅擺盪 → 記為事件
     if (before != null && Math.abs(p - before) >= 0.1) {
       const side = p > before ? 'blue' : 'red', T = S.g.teams;
-      addEv(cur, 'wp', side, `📈 勝率擺盪：${esc(T.blue.code)} ${pctWP(before)} → <b>${pctWP(p)}</b>`, Math.abs(p - before) >= 0.2);
+      addEv(cur, 'wp', side, `${tag('勝率')}勝率擺盪：${esc(T.blue.code)} ${pctWP(before)} → <b>${pctWP(p)}</b>`, Math.abs(p - before) >= 0.2);
     }
   }
   if (prev) diff(prev, cur);
-  if (wf.gameState === 'finished' && !S.finished) { S.finished = true; addEv(cur, 'obj', '', '🏁 <b>比賽結束</b>', true); }
+  if (wf.gameState === 'finished' && !S.finished) { S.finished = true; addEv(cur, 'obj', '', `${tag('結束', 'gold')}<b>比賽結束</b>`, true); }
 }
 
 // ---------- 事件推導 ----------
 function addEv(snap, type, side, html, big) { S.events.push({ t: snap.gt, type, side, html, big }); }
+// 事件類型標籤（取代 emoji，各平台顯示一致）；gold = 關鍵事件
+const tag = (label, cls = '') => `<span class="etag ${cls}">${label}</span>`;
 const pTag = id => { const p = S.players[id]; return `<img src="${champImg(p.championId)}" alt="">${esc(p.name)}`; };
 const teamCode = side => S.g.teams[side].code;
 
@@ -468,7 +470,7 @@ function diff(a, b) {
       const o = pa[p.participantId]; if (!o) continue;
       for (let i = 0; i < p.kills - o.kills; i++) killers.push(p.participantId);
       for (let i = 0; i < p.deaths - o.deaths; i++) victims.push(p.participantId);
-      if (p.level > o.level && [6, 11, 16].includes(p.level)) addEv(b, 'lvl', side, `${pTag(p.participantId)} 升到 ${p.level} 級`);
+      if (p.level > o.level && [6, 11, 16].includes(p.level)) addEv(b, 'lvl', side, `${tag('等級')}${pTag(p.participantId)} 升到 ${p.level} 級`);
     }
   }
   const totalA = a.w.blueTeam.totalKills + a.w.redTeam.totalKills;
@@ -478,16 +480,16 @@ function diff(a, b) {
     const k = ki >= 0 ? killers.splice(ki, 1)[0] : null;
     const fb = totalA === 0 && i === 0;
     addEv(b, 'kill', vSide === 'blue' ? 'red' : 'blue',
-      `${fb ? '🩸 <b>首殺</b> ' : '⚔️ '}${k ? pTag(k) : '<span class="muted">?</span>'} 擊殺 ${pTag(v)}`, fb);
+      `${fb ? tag('首殺', 'gold') : tag('擊殺')}${k ? pTag(k) : '<span class="muted">?</span>'} 擊殺 ${pTag(v)}`, fb);
   });
   // 物件
   for (const side of sides) {
     const ta = a.w[side + 'Team'], tb = b.w[side + 'Team'], c = teamCode(side);
     for (const dr of tb.dragons.slice(ta.dragons.length))
-      addEv(b, 'obj', side, `🐉 ${c} 拿下 <b>${DRAGON[dr] || dr}</b>（第 ${tb.dragons.length} 條）`, dr === 'elder' || tb.dragons.length === 4);
-    if (tb.barons > ta.barons) addEv(b, 'obj', side, `👾 ${c} 拿下 <b>巴龍</b>`, true);
-    if (tb.towers > ta.towers) addEv(b, 'obj', side, `🗼 ${c} 推掉 ${tb.towers - ta.towers} 座塔（共 ${tb.towers}）`, a.w.blueTeam.towers + a.w.redTeam.towers === 0);
-    if (tb.inhibitors > ta.inhibitors) addEv(b, 'obj', side, `💥 ${c} 破壞 <b>水晶兵營</b>`, true);
+      addEv(b, 'obj', side, `${tag(dr === 'elder' ? '遠古' : '小龍', dr === 'elder' || tb.dragons.length === 4 ? 'gold' : '')}${c} 拿下 <b>${DRAGON[dr] || dr}</b>（第 ${tb.dragons.length} 條）`, dr === 'elder' || tb.dragons.length === 4);
+    if (tb.barons > ta.barons) addEv(b, 'obj', side, `${tag('巴龍', 'gold')}${c} 拿下 <b>巴龍</b>`, true);
+    if (tb.towers > ta.towers) addEv(b, 'obj', side, `${tag('推塔')}${c} 推掉 ${tb.towers - ta.towers} 座塔（共 ${tb.towers}）`, a.w.blueTeam.towers + a.w.redTeam.towers === 0);
+    if (tb.inhibitors > ta.inhibitors) addEv(b, 'obj', side, `${tag('兵營', 'gold')}${c} 破壞 <b>水晶兵營</b>`, true);
   }
   // 出裝
   if (a.d && b.d) {
@@ -498,7 +500,7 @@ function diff(a, b) {
         const k = before.indexOf(id);
         if (k >= 0) { before.splice(k, 1); continue; }
         if (isMajorItem(id)) addEv(b, 'item', S.players[p.participantId].side,
-          `🛒 ${pTag(p.participantId)} 完成 <img src="${itemImg(id)}" alt=""> ${esc(itemName(id))}`);
+          `${tag('出裝')}${pTag(p.participantId)} 完成 <img src="${itemImg(id)}" alt=""> ${esc(itemName(id))}`);
       }
     }
   }
@@ -628,27 +630,17 @@ function renderEvents() {
     || '<div class="muted">尚無事件</div>';
 }
 
-// ---------- 直播嵌入 ----------
-function updateStream() {
-  const box = $('#stream'), on = $('#showStream').checked, id = $('#ytId').value.trim();
-  box.hidden = !on;
-  box.innerHTML = on && id ? `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&mute=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>` : '';
-}
-
 // ---------- 啟動 ----------
-// 頂列設定（延遲、直播、自動跟隨）記在瀏覽器裡，重新整理不會被重設
-const PREFS = { delay: 'value', ytId: 'value', showStream: 'checked', follow: 'checked' };
+// 頂列設定（延遲、自動跟隨）記在瀏覽器裡，重新整理不會被重設
+const PREFS = { delay: 'value', follow: 'checked' };
 for (const [id, prop] of Object.entries(PREFS)) {
   try { const v = localStorage.getItem('pref:' + id); if (v !== null) $('#' + id)[prop] = prop === 'checked' ? v === '1' : v; } catch {}
   $('#' + id).addEventListener('change', e => { try { localStorage.setItem('pref:' + id, prop === 'checked' ? (e.target.checked ? '1' : '0') : e.target.value); } catch {} });
 }
-updateStream();
 Draft.init();
 for (const c of ['#chart', '#wpChart']) for (const ev of ['mousemove', 'mouseleave']) $(c).addEventListener(ev, chartHover);
 $('#gameSel').onchange = e => openGame(e.target.value);
 $('#reloadBtn').onclick = () => loadGames();
-$('#showStream').onchange = updateStream;
-$('#ytId').onchange = updateStream;
 $('#filters').onchange = () => S && renderEvents();
 window.addEventListener('resize', () => S?.snaps.length && drawChart());
 setInterval(() => S?.snaps.length && render(), 5000);
