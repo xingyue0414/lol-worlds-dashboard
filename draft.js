@@ -400,5 +400,13 @@ const Draft = (() => {
     };
   }
 
-  return { init, open, fromFeed, render };
+  // 藍紅方被更正時（index.html 的 setSides 已對調共用的 teams），各隊的先發名單也跟著對調
+  function swapSides() {
+    if (!st) return;
+    [st.roster.blue, st.roster.red] = [st.roster.red, st.roster.blue];
+    [st.official.blue, st.official.red] = [st.official.red, st.official.blue];
+    render();
+  }
+
+  return { init, open, fromFeed, render, swapSides };
 })();

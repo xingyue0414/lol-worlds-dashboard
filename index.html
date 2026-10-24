@@ -254,9 +254,9 @@
 </main>
 
 <!-- ?v= 每次更新改一下，避免手機沿用快取的舊檔 -->
-<script src="draft.js?v=8"></script>
-<script src="winprob.js?v=8"></script>
-<script src="review.js?v=8"></script>
+<script src="draft.js?v=9"></script>
+<script src="winprob.js?v=9"></script>
+<script src="review.js?v=9"></script>
 <script>
 const GW = 'https://esports-api.lolesports.com/persisted/gw';
 const API_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'; // lolesports.com 網站公開使用的 key
@@ -392,8 +392,12 @@ async function openGame(gameId) {
     $('#msg').innerHTML = waitingCard(g); setStatus('等待開局', false);
     await new Promise(r => setTimeout(r, 15000));
     if (my !== session) return;
+    // 賽程的藍紅方開打前可能被官方更正：沿用每分鐘重新載入的最新賽程
+    const latest = games.find(x => x.gameId === gameId);
+    if (latest && latest.teams.blue.id !== g.teams.blue.id) setSides(g, latest.teams.blue.id);
   }
   S.meta = first.gameMetadata;
+  setSides(g, S.meta.blueTeamMetadata.esportsTeamId); // 開局後以直播資料的實際藍紅方為準
   S.t0 = Date.parse(first.frames[0].rfc460Timestamp);
   await loadDD(S.meta.patchVersion);
   if (my !== session) return;
@@ -410,6 +414,13 @@ async function openGame(gameId) {
   await catchUp(my, end, true);
   if (my !== session) return;
   liveLoop(my);
+}
+
+// 把對局的藍紅方對齊到指定的藍方隊伍（原地對調，選角面板共用同一個物件）
+function setSides(g, blueId) {
+  if (!blueId || g.teams.blue.id === blueId || g.teams.red.id !== blueId) return;
+  [g.teams.blue, g.teams.red] = [g.teams.red, g.teams.blue];
+  Draft.swapSides();
 }
 
 // 等待開局時的卡片：兩隊隊徽 + 賽前勝率（Elo）
