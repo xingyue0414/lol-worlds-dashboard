@@ -308,7 +308,10 @@ async function gw(path, params) {
   return (await r.json()).data;
 }
 async function feed(kind, gameId, startMs) {
-  const r = await fetch(`${FEED}/${kind}/${gameId}` + (startMs ? `?startingTime=${iso(startMs)}` : ''));
+  const url = `${FEED}/${kind}/${gameId}` + (startMs ? `?startingTime=${iso(startMs)}` : '');
+  let r = await fetch(url);
+  // 直播時資料還沒產生就會回 404，而且 CDN 會把這個 404 快取一陣子；加參數繞過快取再試一次
+  if (r.status === 404 && startMs) r = await fetch(`${url}&_=${Date.now()}`);
   if (r.status === 204 || r.status === 404) return null;
   if (!r.ok) throw new Error(`feed ${r.status}`);
   return r.json();
@@ -400,6 +403,7 @@ async function openGame(gameId) {
     for (const p of tm.participantMetadata) S.players[p.participantId] = { ...p, side, name: cleanName(p.summonerName, S.g.teams[side].code) };
 
   $('#msg').hidden = true; $('#board').hidden = false;
+  ingest(first.frames.at(-1), null); render(); // 先顯示開局狀態，不用等補抓完
   // 補抓歷史 → 再進入即時輪詢
   const end = () => g.state !== 'completed' ? Date.now() - delayMs() : Infinity;
   S.cursor = Math.floor(S.t0 / STEP) * STEP;
@@ -429,16 +433,22 @@ async function catchUp(my, end, initial) {
     if (initial) setStatus(`補抓歷史資料… ${fmtT(S.snaps.at(-1)?.gt || 0)}`, false);
     const res = await Promise.all(batch.map(t => Promise.all([feed('window', S.g.gameId, t), feed('details', S.g.gameId, t)]).catch(() => [null, null])));
     if (my !== session) return;
-    let got = 0;
-    for (const [w, d] of res) {
-      if (!w?.frames?.length) continue;
+    let got = 0, done = batch.length;
+    for (let i = 0; i < res.length; i++) {
+      const [w, d] = res[i];
+      if (!w?.frames?.length) {
+        // 直播中缺資料：feed 常常晚一點才補上，停在這裡下一輪重試；超過 1 分鐘仍沒有才跳過
+        if (end() !== Infinity && batch[i] > Date.now() - delayMs() - 60000) { done = i; break; }
+        continue;
+      }
       got++;
       const dmap = new Map((d?.frames || []).map(f => [f.rfc460Timestamp, f]));
       // 每個 window 取最後一個有對應 details 的 frame
       let wf = w.frames[w.frames.length - 1], df = dmap.get(wf.rfc460Timestamp) || d?.frames?.at(-1);
       ingest(wf, df);
     }
-    S.cursor += batch.length * STEP;
+    S.cursor += done * STEP;
+    if (done < batch.length) break;
     misses = got ? 0 : misses + 1;
     if (end() === Infinity && misses >= 3) break; // 已完成的對局：抓不到資料代表結束
   }
