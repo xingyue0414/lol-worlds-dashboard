@@ -254,9 +254,9 @@
 </main>
 
 <!-- ?v= 每次更新改一下，避免手機沿用快取的舊檔 -->
-<script src="draft.js?v=5"></script>
-<script src="winprob.js?v=5"></script>
-<script src="review.js?v=5"></script>
+<script src="draft.js?v=7"></script>
+<script src="winprob.js?v=7"></script>
+<script src="review.js?v=7"></script>
 <script>
 const GW = 'https://esports-api.lolesports.com/persisted/gw';
 const API_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'; // lolesports.com 網站公開使用的 key
@@ -459,7 +459,7 @@ function ingest(wf, df) {
   S.snaps.push(cur);
   S.gold.push([gt, wf.blueTeam.totalGold - wf.redTeam.totalGold]);
   if (WP.model) {
-    const p = WP.prob(wf, gt / 1000, S.g.teams);
+    const p = WP.probAt(S, S.snaps.length - 1);
     const before = S.wp.at(-1)?.[1];
     S.wp.push([gt, p]);
     // 勝率在一個取樣間隔內大幅擺盪 → 記為事件
@@ -669,7 +669,7 @@ setInterval(async () => {
   try {
     if (!WP.model) {
       await WP.load();
-      if (WP.model && S) { S.wp = S.snaps.map(s => [s.gt, WP.prob(s.w, s.gt / 1000, S.g.teams)]); render(); Draft.render(); }
+      if (WP.model && S) { S.wp = S.snaps.map((s, i) => [s.gt, WP.probAt(S, i)]); render(); Draft.render(); }
     }
     await loadGames();
     if (!$('#follow').checked) return;

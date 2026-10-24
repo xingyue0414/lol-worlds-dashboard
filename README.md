@@ -8,7 +8,7 @@
 
 - **即時比賽**：雙方擊殺、經濟、塔、小龍、巴龍、水晶兵營；10 位選手的英雄、等級、KDA、CS、出裝、符文；暫停時間會自動扣除
 - **事件時間軸**：首殺、擊殺、小龍/巴龍、推塔、完成裝備、勝率大幅擺盪
-- **即時勝率**：邏輯斯迴歸模型（經濟差、擊殺、塔、龍、龍魂、遠古龍、巴龍、兵營、時間、隊伍 Elo）
+- **即時勝率**：LightGBM 模型（經濟差與趨勢、各路經濟、等級、擊殺、塔、龍、龍魂、遠古龍、巴龍、buff 生效中、兵營、時間、隊伍 Elo）
 - **選角 BP**：看直播點選輸入，即時計算下一手選/禁機率與本局出場機率；可模擬剩餘 BP、手動調整先發與先選方
 - **賽後復盤**：比賽結束後自動推導輸方敗因
 
@@ -24,7 +24,8 @@ python -m http.server 8765
 
 ```bash
 python build_history.py      # 近期職業賽選角資料 → history.json
-python build_winprob.py      # 抽樣場上狀態並訓練勝率模型 → winprob_model.json
+python collect_v2.py         # 每分鐘抽樣場上狀態（扣除暫停）＋ 系列賽比分 → winprob_v2_samples.json
+python train_v2.py           # 訓練並和舊模型比較，較好才輸出 → winprob_model.json
 ```
 
 ## 注意
