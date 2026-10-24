@@ -4,14 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Worlds 即時面板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0b0f17; --panel: #131a26; --panel2: #1a2333; --line: #263248;
-    --text: #e6ebf3; --muted: #8a97ad; --blue: #4a9eff; --red: #ff5a5f; --gold: #f0c35a; --green: #4fd18b;
+    --bg: #050c18; --panel: #0a1428; --panel2: #12223d; --line: #1d3557;
+    --text: #f0e6d2; --muted: #8ba3c7; --blue: #0ac8ff; --red: #ff4655; --gold: #c8aa6e; --green: #3ddc84;
+    --ink: #0a1428; --cut: 12px;
+    --display: "Barlow Condensed", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
   header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
   header h1 { font-size: 16px; margin: 0 8px 0 0; color: var(--gold); }
   select, input, button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
@@ -120,11 +125,74 @@
   .simfreq { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; font-size: 11px; } .simfreq .muted { width: 100%; }
   .simchip { display: inline-flex; align-items: center; gap: 2px; background: var(--panel2); border-radius: 4px; padding: 1px 4px 1px 1px; } .simchip img { width: 22px; height: 22px; border-radius: 3px; } .cg.off { opacity: .2; pointer-events: none; }
   .grid2 { display: grid; gap: 12px; }
+
+  /* ===== 電競轉播風：斜切角、粗體窄字、藍紅金 ===== */
+  header { background: #040a14; border-bottom: 2px solid var(--gold); }
+  header h1 { font-family: var(--display); font-size: 22px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--text); }
+  header h1 span { color: var(--gold); }
+  select, input, button { border-radius: 0; }
+  button:hover, select:hover { border-color: var(--gold); color: var(--gold); }
+  .card { border-radius: 0; clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%); }
+  .card h2 { font-family: var(--display); font-size: 16px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gold); }
+  .card h2::before { content: ''; display: inline-block; width: 4px; height: 14px; margin-right: 8px; vertical-align: -1px; background: currentColor; }
+  #draftCard summary::before { content: none; }
+  #draftCard summary h2::after { content: ' ▾'; color: var(--muted); } #draftCard:not([open]) summary h2::after { content: ' ▸'; }
+  #stream iframe { border-radius: 0; }
+
+  #score { background: var(--panel); border-top: 3px solid var(--gold); }
+  .team.blue { border-left: 4px solid var(--blue); padding-left: 10px; }
+  .team.red { border-right: 4px solid var(--red); padding-right: 10px; }
+  .team .code { font-family: var(--display); font-size: 32px; font-weight: 800; letter-spacing: 1px; line-height: 1; }
+  .team .objs { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .center .kills { display: inline-block; background: var(--gold); color: var(--ink); padding: 2px 18px; font-family: var(--display); font-size: 36px; font-weight: 800; letter-spacing: 2px; line-height: 1.15;
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%); }
+  .center .kills .b, .center .kills .r { color: var(--ink); }
+  .center .clock { font-family: var(--display); font-size: 18px; font-weight: 700; letter-spacing: 2px; margin-top: 4px; }
+  .stats { font-family: var(--display); font-size: 18px; font-weight: 700; }
+  .stats div:nth-child(3n+2) { font-family: "Noto Sans TC", sans-serif; font-weight: 400; letter-spacing: 1px; }
+  .drake { border-radius: 0; border: 0; border-left: 2px solid var(--gold); background: var(--panel2); }
+  .wpbar .lbl b { font-family: var(--display); font-size: 26px; font-weight: 800; }
+  .wpbar .lbl .muted { text-transform: uppercase; letter-spacing: 2px; font-size: 12px; align-self: center; }
+  .wpbar .track { height: 12px; border-radius: 0; gap: 3px; background: transparent; }
+  .wpnow { font-family: var(--display); font-size: 30px; font-weight: 800; letter-spacing: 1px; }
+
+  th { background: var(--panel2); color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
+  .blueT { border-left: 4px solid var(--blue); } .redT { border-left: 4px solid var(--red); }
+  .champ .ico img { border-radius: 0; outline: 1px solid var(--line); }
+  .champ .lvl { background: var(--gold); color: var(--ink); font-weight: 700; border-radius: 0; font-family: var(--display); font-size: 13px; padding: 0 4px; }
+  .champ .ico img.ks { outline: 0; }
+  .champ .name { font-family: var(--display); font-size: 17px; font-weight: 700; letter-spacing: .5px; }
+  td b { font-family: var(--display); font-size: 16px; }
+  .hp, .hp i { border-radius: 0; }
+  .items img, .items span { border-radius: 0; }
+
+  .ev { background: var(--panel2); border-bottom: 0; margin-bottom: 4px; padding: 6px 8px; grid-template-columns: 50px 1fr; }
+  .ev .t { font-family: var(--display); font-size: 15px; font-weight: 700; }
+  .ev.blue, .ev.red { padding-left: 8px; }
+  .ev.big { background: #c8aa6e24; }
+
+  #review { border-top: 3px solid var(--gold); background: #0c1930; }
+  .rv-list li::marker { color: var(--gold); font-family: var(--display); font-weight: 700; }
+  .rv-sum b { font-family: var(--display); font-size: 17px; }
+
+  .slot, .slot.ban img, .slot.pick img, .cg img, .pbar img, .simchip, .simchip img { border-radius: 0; }
+  .slot.cur { box-shadow: none; background: #c8aa6e1a; }
+  .dteam { font-family: var(--display); font-size: 20px; font-weight: 800; letter-spacing: 1px; }
+  .pb-track, .pb-track i { border-radius: 0; }
+  .pb-top b { font-family: var(--display); font-size: 15px; }
+
+  @media (max-width: 600px) {
+    .team.blue, .team.red { border: 0; padding: 0; }
+    .team .code { font-size: 24px; }
+    .center .kills { font-size: 30px; padding: 2px 14px; }
+    .wpbar .lbl b { font-size: 22px; }
+    header h1 { font-size: 19px; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>🏆 Worlds 2026 即時面板</h1>
+  <h1><span>Worlds 2026</span> 即時面板</h1>
   <select id="gameSel"><option>載入賽程中…</option></select>
   <button id="reloadBtn" title="重新整理賽程">↻</button>
   <label><input type="checkbox" id="follow" checked> 自動跟隨直播</label>
@@ -469,8 +537,8 @@ function render() {
       <div>${B.barons}</div><div>巴龍</div><div>${R.barons}</div>
       <div>${B.dragons.length}</div><div>小龍</div><div>${R.dragons.length}</div>
     </div>`;
-  $('#blueName').textContent = `🔵 ${T.blue.code} · 藍方`;
-  $('#redName').textContent = `🔴 ${T.red.code} · 紅方`;
+  $('#blueName').textContent = `${T.blue.code} · 藍方`;
+  $('#redName').textContent = `${T.red.code} · 紅方`;
   const det = Object.fromEntries((d?.participants || []).map(p => [p.participantId, p]));
   $('#blueTbl').innerHTML = teamTable(B.participants, det);
   $('#redTbl').innerHTML = teamTable(R.participants, det);

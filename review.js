@@ -175,7 +175,7 @@ const Review = (() => {
     if (!S?.finished || S.snaps.length < 10) { box.hidden = true; return; }
     const { lose, summary, reasons } = analyze();
     box.hidden = false;
-    box.innerHTML = `<h2>🔍 賽後復盤 · ${esc(S.g.teams[lose].code)} 為什麼輸</h2><div class="rv-sum">${summary}</div>
+    box.innerHTML = `<h2>賽後復盤 · ${esc(S.g.teams[lose].code)} 為什麼輸</h2><div class="rv-sum">${summary}</div>
       <ol class="rv-list">${reasons.slice(0, 6).map(r => `<li>${r.html}</li>`).join('')}</ol>
       <div class="muted" style="font-size:12px">依比賽數據自動推導（勝率模型、物件時間、各路經濟），不含視野、技能與兵線細節。</div>`;
   }
