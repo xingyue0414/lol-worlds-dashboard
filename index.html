@@ -94,6 +94,13 @@
   .ev img { width: 18px; height: 18px; vertical-align: -4px; border-radius: 3px; }
   #filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; font-size: 12px; }
   #msg { padding: 30px; text-align: center; color: var(--muted); }
+  .wrow { display: flex; align-items: center; justify-content: center; gap: 24px; margin-bottom: 14px; }
+  .wteam { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .wteam img { width: 64px; height: 64px; object-fit: contain; }
+  .wteam b { font-family: var(--display); font-size: 30px; font-weight: 800; letter-spacing: 1px; line-height: 1; }
+  .wteam.blue b { color: var(--blue); } .wteam.red b { color: var(--red); }
+  .wvs { font-family: var(--display); font-size: 22px; font-weight: 800; color: var(--gold); }
+  #msg .wpbar { text-align: left; } .wnote { margin-top: 14px; font-size: 13px; }
   #draftCard summary { cursor: pointer; list-style: none; } #draftCard summary h2 { display: inline; }
   #draftCard summary::before { content: '▾ '; color: var(--muted); } #draftCard:not([open]) summary::before { content: '▸ '; }
   #draftSides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
@@ -246,9 +253,10 @@
   </div>
 </main>
 
-<script src="draft.js"></script>
-<script src="winprob.js"></script>
-<script src="review.js"></script>
+<!-- ?v= 每次更新改一下，避免手機沿用快取的舊檔 -->
+<script src="draft.js?v=5"></script>
+<script src="winprob.js?v=5"></script>
+<script src="review.js?v=5"></script>
 <script>
 const GW = 'https://esports-api.lolesports.com/persisted/gw';
 const API_KEY = '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'; // lolesports.com 網站公開使用的 key
@@ -318,7 +326,7 @@ async function loadGames() {
     .sort((a, b) => b.startTime.localeCompare(a.startTime));
   // 即將開打、隊伍已確定的比賽（可先做 BP 預測／模擬）
   const upcoming = sched.schedule.events.filter(e => e.state === 'unstarted' && e.match?.teams?.every(t => t.code && t.code !== 'TBD'))
-    .sort((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, 4);
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const details = await Promise.all([...upcoming, ...recent].map(e => gw('getEventDetails', { id: e.match.id })
     .then(d => ({ ...e, match: {
       ...e.match, games: d.event.match.games,
@@ -378,7 +386,7 @@ async function openGame(gameId) {
   let first;
   while (!(first = await feed('window', gameId).catch(() => null))) {
     if (my !== session) return;
-    $('#msg').textContent = '⏳ 比賽尚未開始（選角/載入中），每 15 秒重試…'; setStatus('等待開局', false);
+    $('#msg').innerHTML = waitingCard(g); setStatus('等待開局', false);
     await new Promise(r => setTimeout(r, 15000));
     if (my !== session) return;
   }
@@ -398,6 +406,15 @@ async function openGame(gameId) {
   await catchUp(my, end, true);
   if (my !== session) return;
   liveLoop(my);
+}
+
+// 等待開局時的卡片：兩隊隊徽 + 賽前勝率（Elo）
+function waitingCard(g) {
+  const T = g.teams, side = s => `<div class="wteam ${s}"><img src="${esc(T[s].image)}" alt=""><b>${esc(T[s].code)}</b></div>`;
+  const when = new Date(g.start).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return `<div class="wrow">${side('blue')}<div class="wvs">VS</div>${side('red')}</div>
+    ${WP.model ? wpBar(WP.pregame(T), T, `賽前勝率（Elo ${WP.elo(T.blue)} : ${WP.elo(T.red)}）`) : ''}
+    <div class="wnote">比賽尚未開始（${esc(when)}，選角或載入中），開打後自動切換為即時數據</div>`;
 }
 
 const delayMs = () => Math.max(20, +$('#delay').value || 60) * 1000;

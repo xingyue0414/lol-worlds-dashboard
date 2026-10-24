@@ -170,6 +170,7 @@ const Draft = (() => {
       roster: { blue: defaultRoster(g.teams.blue), red: defaultRoster(g.teams.red) }, official: { blue: [], red: [] } };
     setFirst(st.first);
     $('#draftCard').hidden = false;
+    $('#draftCard').open = g.state !== 'completed'; // 未開打（或選角中）展開；已結束的收合，開局後由 fromFeed 收合
     render();
     loadOfficial(st);
     loadLocked(st, g, allGames); // 不等它：open() 結束時 st 就已就緒，呼叫端才能接著套用 feed
