@@ -445,11 +445,12 @@ async function catchUp(my, end, initial) {
     const res = await Promise.all(batch.map(t => Promise.all([feed('window', S.g.gameId, t), feed('details', S.g.gameId, t)]).catch(() => [null, null])));
     if (my !== session) return;
     let got = 0, done = batch.length;
+    const lastWithData = res.findLastIndex(([w]) => w?.frames?.length);
     for (let i = 0; i < res.length; i++) {
       const [w, d] = res[i];
       if (!w?.frames?.length) {
-        // 直播中缺資料：feed 常常晚一點才補上，停在這裡下一輪重試；超過 1 分鐘仍沒有才跳過
-        if (end() !== Infinity && batch[i] > Date.now() - delayMs() - 60000) { done = i; break; }
+        // 直播中缺資料：後面已經有資料 → 這格是真的缺，跳過；後面都還沒有 → 官方 feed 還沒追上（有時落後好幾分鐘），停在這裡下一輪重試
+        if (end() !== Infinity && i > lastWithData) { done = i; break; }
         continue;
       }
       got++;
@@ -470,11 +471,13 @@ function ingest(wf, df) {
   const t = Date.parse(wf.rfc460Timestamp);
   const prev = S.snaps.at(-1);
   if (prev && t <= prev.t) return;
-  // 遊戲時間：暫停時 feed 停止產生 frame、恢復後時間戳直接跳過去，所以只累加實際進行中的間隔
+  // 遊戲時間：暫停時 feed 停止產生 frame、恢復後時間戳直接跳過去，所以只累加實際進行中的間隔。
+  // 長間隔有兩種：暫停（場上凍結、雙方經濟不變）→ 不計；官方 feed 漏資料（比賽照打、經濟有增加）→ 整段計入
   let gt = t - S.t0;
   if (prev) {
-    const gap = t - prev.t;
-    gt = prev.gt + (prev.w.gameState === 'paused' ? 0 : gap > 3 * STEP ? STEP : gap);
+    const gap = t - prev.t, gold = f => f.blueTeam.totalGold + f.redTeam.totalGold;
+    const frozen = gap > 3 * STEP && gold(wf) === gold(prev.w);
+    gt = prev.gt + (prev.w.gameState === 'paused' ? 0 : frozen ? STEP : gap);
   }
   const cur = { t, gt, w: wf, d: df };
   S.snaps.push(cur);
@@ -554,7 +557,10 @@ async function liveLoop(my) {
       await catchUp(my, () => Date.now() - delayMs(), false);
       if (my !== session) return;
       const last = S.snaps.at(-1);
-      setStatus(last ? `直播中 · 遊戲時間 ${fmtT(last.gt)}（延遲 ${Math.round((Date.now() - last.t) / 1000)}s）` : '直播中', true);
+      const lag = last ? Math.round((Date.now() - last.t) / 1000) : 0;
+      setStatus(!last ? '直播中' : lag > delayMs() / 1000 + 60
+        ? `直播中 · 遊戲時間 ${fmtT(last.gt)}（官方數據延遲中，落後 ${fmtT(lag * 1000)}）`
+        : `直播中 · 遊戲時間 ${fmtT(last.gt)}（延遲 ${lag}s）`, true);
     } catch (e) { setStatus('連線錯誤，重試中…', false); }
     await new Promise(r => setTimeout(r, 5000));
   }
